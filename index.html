@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>German Article Trainer</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React and ReactDOM libraries -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel to transpile JSX in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // All the React component code goes here.
+        // It's the same code as in the previous artifact.
+
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+        // --- SVG Icons ---
+        const LoaderIcon = () => (
+            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        );
+
+        const SettingsIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 0 2l-.15.08a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l-.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1 0 2l.15-.08a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+        );
+
+        const CheckCircleIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 ml-2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+        );
+
+        const XCircleIcon = () => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 ml-2">
+                <circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+        );
+
+
+        // --- Settings Dialog Component ---
+        const SettingsDialog = ({ 
+            isOpen, 
+            onClose, 
+            userApiKey, 
+            setUserApiKey, 
+            imagePrompt, 
+            setImagePrompt,
+            onRestart
+        }) => {
+            if (!isOpen) return null;
+
+            const [tempApiKey, setTempApiKey] = useState(userApiKey);
+            const [tempPrompt, setTempPrompt] = useState(imagePrompt);
+            const [notification, setNotification] = useState('');
+
+            const handleSave = () => {
+                localStorage.setItem('germanTrainerApiKey', tempApiKey);
+                setUserApiKey(tempApiKey);
+                localStorage.setItem('germanTrainerImagePrompt', tempPrompt);
+                setImagePrompt(tempPrompt);
+                setNotification('Settings saved!');
+                setTimeout(() => setNotification(''), 2000);
+            };
+
+            const handleClearCache = () => {
+                Object.keys(localStorage).forEach(key => {
+                    if (key.startsWith('german_trainer_image_')) {
+                        localStorage.removeItem(key);
+                    }
+                });
+                setNotification('Image cache cleared!');
+                setTimeout(() => setNotification(''), 2000);
+            };
+            
+            const handleSaveAndRestart = () => {
+                handleSave();
+                onClose();
+                onRestart();
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg max-h-full overflow-y-auto">
+                        <h2 className="text-3xl font-bold text-gray-800 mb-6">Settings</h2>
+                        
+                        <div className="space-y-6">
+                            <div>
+                                <label htmlFor="api-key" className="block text-sm font-bold text-gray-700 mb-1">Custom API Key</label>
+                                <input
+                                    type="password"
+                                    id="api-key"
+                                    value={tempApiKey}
+                                    onChange={(e) => setTempApiKey(e.target.value)}
+                                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Enter your Gemini API key"
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="image-prompt" className="block text-sm font-bold text-gray-700 mb-1">Image Generation Prompt</label>
+                                <textarea
+                                    id="image-prompt"
+                                    rows="5"
+                                    value={tempPrompt}
+                                    onChange={(e) => setTempPrompt(e.target.value)}
+                                    className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Use `{'{WORD}'}` and `{'{COLOR}'}` as placeholders.</p>
+                            </div>
+                        </div>
+                        
+                        <div className="mt-8 flex flex-col sm:flex-row gap-4">
+                            <button onClick={handleSaveAndRestart} className="w-full sm:w-auto flex-1 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all">Save & Restart</button>
+                            <button onClick={handleClearCache} className="w-full sm:w-auto bg-yellow-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-yellow-600 focus:outline-none focus:ring-4 focus:ring-yellow-300 transition-all">Clear Image Cache</button>
+                            <button onClick={onClose} className="w-full sm:w-auto bg-gray-200 text-gray-700 font-bold py-3 px-4 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-4 focus:ring-gray-300 transition-all">Close</button>
+                        </div>
+
+                        {notification && <div className="mt-4 text-center text-green-600 font-semibold">{notification}</div>}
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App Component ---
+        function App() {
+            // --- State Variables ---
+            const [gameState, setGameState] = useState('setup'); // setup, loading, learning, answered, finished
+            const [topic, setTopic] = useState('common household items');
+            const [wordCount, setWordCount] = useState(5);
+            const [words, setWords] = useState([]);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [userGuess, setUserGuess] = useState(null);
+            const [timer, setTimer] = useState(5);
+            const timerIdRef = useRef(null); // Use ref to avoid re-render loops
+            const [error, setError] = useState(null);
+            const [isFlipped, setIsFlipped] = useState(false);
+            const [score, setScore] = useState(0);
+            const [loadingProgress, setLoadingProgress] = useState(0);
+            const [isChangingWord, setIsChangingWord] = useState(false); // State to handle transition glitch
+            const [errorList, setErrorList] = useState([]); // State for incorrect guesses
+            const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+            // --- Settings State ---
+            const [userApiKey, setUserApiKey] = useState('');
+            const [imagePrompt, setImagePrompt] = useState(
+                "A simple, clear, vector art illustration of a {WORD}. The main color of the object should be {COLOR}. Minimalist style, on a clean white background."
+            );
+
+            // --- Load settings from localStorage on initial render ---
+            useEffect(() => {
+                const savedApiKey = localStorage.getItem('germanTrainerApiKey') || '';
+                setUserApiKey(savedApiKey);
+
+                const savedPrompt = localStorage.getItem('germanTrainerImagePrompt');
+                if (savedPrompt) {
+                    setImagePrompt(savedPrompt);
+                }
+            }, []);
+
+            // --- Memoized Current Word ---
+            const currentWord = useMemo(() => words[currentIndex], [words, currentIndex]);
+
+            // --- API Call to Generate Images (with Caching) ---
+            const generateImagesForWords = useCallback(async (wordsToProcess) => {
+                const totalImages = wordsToProcess.length;
+                const CACHE_PREFIX = 'german_trainer_image_';
+                const apiKey = userApiKey; // No need for `|| ""` here, it's handled in handleStart
+
+                for (let i = 0; i < totalImages; i++) {
+                    const wordData = wordsToProcess[i];
+                    const cacheKey = `${CACHE_PREFIX}${wordData.word.toLowerCase()}`;
+                    
+                    try {
+                        const cachedImage = localStorage.getItem(cacheKey);
+
+                        if (cachedImage) {
+                            setWords(prevWords => {
+                                const newWords = [...prevWords];
+                                if (newWords[i]) newWords[i] = { ...newWords[i], imageUrl: cachedImage, imageLoading: false };
+                                return newWords;
+                            });
+                        } else {
+                            const articleColor = wordData.article === 'der' ? 'blue' : wordData.article === 'die' ? 'red' : 'yellow';
+                            const prompt = imagePrompt
+                                .replace('{WORD}', wordData.word)
+                                .replace('{COLOR}', articleColor);
+                            
+                            const payload = { instances: [{ prompt }], parameters: { "sampleCount": 1 } };
+                            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+
+                            const response = await fetch(apiUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+                
+                            if (!response.ok) throw new Error(`Image API Error: ${response.status}`);
+                            const result = await response.json();
+                            
+                            if (result.predictions && result.predictions[0]?.bytesBase64Encoded) {
+                                const imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+                                try {
+                                    localStorage.setItem(cacheKey, imageUrl);
+                                } catch (e) {
+                                    if (e.name === 'QuotaExceededError') {
+                                        console.warn(`Could not cache image for "${wordData.word}". LocalStorage quota exceeded. You can clear the cache in Settings.`);
+                                    } else {
+                                        console.error('An error occurred while caching the image:', e);
+                                    }
+                                }
+                                setWords(prevWords => {
+                                    const newWords = [...prevWords];
+                                    if (newWords[i]) newWords[i] = { ...newWords[i], imageUrl, imageLoading: false };
+                                    return newWords;
+                                });
+                            } else {
+                               throw new Error('Image data not found in API response.');
+                            }
+                        }
+                    } catch (err) {
+                        console.error(`Error getting image for ${wordData.word}:`, err);
+                        setWords(prevWords => {
+                            const newWords = [...prevWords];
+                            if (newWords[i]) newWords[i] = { ...newWords[i], imageUrl: null, imageLoading: false };
+                            return newWords;
+                        });
+                    }
+                    setLoadingProgress(10 + ((i + 1) / totalImages) * 90);
+                }
+                
+                setTimeout(() => {
+                    setGameState('learning');
+                }, 100);
+            }, [userApiKey, imagePrompt]);
+            
+            // --- API Call to Generate Words ---
+            const generateWords = useCallback(async () => {
+                setError(null);
+                setGameState('loading');
+                setLoadingProgress(0);
+                
+                const apiKey = userApiKey;
+
+                const prompt = `Generate a list of ${wordCount} German nouns related to the topic '${topic}'. For each noun, provide its definite article ('der', 'die', or 'das'). Return the response as a JSON array of objects, where each object has "word" and "article" keys. The article must be one of 'der', 'die', or 'das'.`;
+                const chatHistory = [{ role: "user", parts: [{ text: prompt }] }];
+                
+                const payload = {
+                    contents: chatHistory,
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    "word": { "type": "STRING" },
+                                    "article": { "type": "STRING", "enum": ["der", "die", "das"] }
+                                },
+                                required: ["word", "article"]
+                            }
+                        }
+                    }
+                };
+
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`API Error: ${response.status} ${response.statusText}`);
+                    
+                    setLoadingProgress(10);
+                    const result = await response.json();
+                    if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0].text) {
+                        const parsedWords = JSON.parse(result.candidates[0].content.parts[0].text);
+                        const wordsWithImages = parsedWords.map(word => ({ ...word, imageUrl: null, imageLoading: true }));
+                        setWords(wordsWithImages);
+                        generateImagesForWords(wordsWithImages);
+                    } else {
+                        throw new Error("Failed to generate words. The API returned an unexpected response.");
+                    }
+                } catch (err) {
+                    console.error(err);
+                    setError(err.message);
+                    setGameState('setup');
+                }
+            }, [wordCount, topic, userApiKey, generateImagesForWords]);
+
+            const handleRestart = useCallback(() => {
+                setGameState('setup');
+                setWords([]);
+                setCurrentIndex(0);
+                setUserGuess(null);
+                setError(null);
+                setIsFlipped(false);
+                setIsChangingWord(false);
+                setScore(0);
+                setErrorList([]);
+                if (timerIdRef.current) {
+                   clearInterval(timerIdRef.current);
+                   timerIdRef.current = null;
+                }
+            }, []);
+
+            // --- Event Handlers ---
+            const handleNext = useCallback(() => {
+                if (timerIdRef.current) {
+                    clearInterval(timerIdRef.current);
+                    timerIdRef.current = null;
+                }
+                setTimer(5);
+
+                if (currentIndex < words.length - 1) {
+                    setIsFlipped(false);
+                    setIsChangingWord(true);
+                    setTimeout(() => { 
+                        setCurrentIndex(prev => prev + 1);
+                        setUserGuess(null);
+                        setGameState('learning');
+                        setIsChangingWord(false);
+                    }, 700);
+                } else {
+                    setGameState('finished');
+                }
+            }, [currentIndex, words.length]);
+
+            const handleStart = (e) => {
+                e.preventDefault();
+                setError(null);
+
+                if (!userApiKey) {
+                    setError("Please add your Gemini API key in the settings before starting.");
+                    setIsSettingsOpen(true);
+                    return;
+                }
+
+                if (topic && wordCount > 0 && wordCount <= 20) {
+                    generateWords();
+                } else {
+                    setError("Please provide a topic and a number of words between 1 and 20.");
+                }
+            };
+
+            const handleGuess = (guess) => {
+                if (gameState !== 'learning') return;
+                const isCorrect = guess === currentWord.article;
+                if (isCorrect) {
+                    setScore(s => s + 1);
+                } else {
+                    setErrorList(prevErrors => {
+                        const isAlreadyInList = prevErrors.some(err => err.word === currentWord.word);
+                        return isAlreadyInList ? prevErrors : [...prevErrors, currentWord];
+                    });
+                }
+                setUserGuess(guess);
+                setGameState('answered');
+                setIsFlipped(true);
+            };
+
+            // --- Timer Logic ---
+            useEffect(() => {
+                if (gameState === 'answered') {
+                    timerIdRef.current = setInterval(() => {
+                        setTimer(prev => {
+                            if (prev <= 1) {
+                                handleNext();
+                                return 5;
+                            }
+                            return prev - 1;
+                        });
+                    }, 1000);
+                }
+                return () => { 
+                    if (timerIdRef.current) {
+                        clearInterval(timerIdRef.current);
+                    }
+                };
+            }, [gameState, handleNext]);
+
+
+            // --- UI Rendering ---
+            
+            const renderSetup = () => (
+                <div className="w-full max-w-md mx-auto">
+                    <div className="text-center mb-8">
+                        <h1 className="text-4xl md:text-5xl font-bold text-gray-800">German Article Trainer</h1>
+                        <p className="text-gray-600 mt-2">Master 'der', 'die', 'das' with AI-powered flashcards.</p>
+                    </div>
+                    <form onSubmit={handleStart} className="bg-white p-8 rounded-2xl shadow-lg border border-gray-200">
+                        <div className="mb-6">
+                            <label htmlFor="topic" className="block text-sm font-bold text-gray-700 mb-2">Topic</label>
+                            <input
+                                type="text"
+                                id="topic"
+                                value={topic}
+                                onChange={(e) => setTopic(e.target.value)}
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+                                placeholder="e.g., animals, office items"
+                            />
+                        </div>
+                        <div className="mb-8">
+                            <label htmlFor="word-count" className="block text-sm font-bold text-gray-700 mb-2">Number of Words (1-20)</label>
+                            <input
+                                type="number"
+                                id="word-count"
+                                value={wordCount}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    if (val === '') {
+                                        setWordCount('');
+                                        return;
+                                    }
+                                    const num = parseInt(val, 10);
+                                    if (!isNaN(num)) {
+                                        setWordCount(num);
+                                    }
+                                }}
+                                min="1"
+                                max="20"
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            className="w-full bg-blue-600 text-white font-bold py-4 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-300 ease-in-out transform hover:-translate-y-1 shadow-md"
+                            disabled={gameState === 'loading'}
+                        >
+                            {gameState === 'loading' ? 'Generating...' : 'Start Learning'}
+                        </button>
+                        {error && <p className="text-red-500 text-sm mt-4 text-center">{error}</p>}
+                    </form>
+                </div>
+            );
+            
+            const renderLoading = () => (
+                <div className="text-center text-gray-700 w-full max-w-md mx-auto">
+                    <h2 className="text-3xl font-bold mb-4">Generating your lesson...</h2>
+                    <div className="w-full bg-gray-200 rounded-full h-4 dark:bg-gray-700 my-4 overflow-hidden">
+                        <div className="bg-blue-600 h-4 rounded-full transition-all duration-500 ease-linear" style={{ width: `${loadingProgress}%` }}></div>
+                    </div>
+                    <p className="text-lg">{loadingProgress < 15 ? 'Thinking of words...' : 'Creating images...'}</p>
+                </div>
+            );
+
+            const renderFlashcard = () => {
+                if (!currentWord) return <div className="w-full max-w-md h-96 flex items-center justify-center"><LoaderIcon /></div>;
+                const articleColorClass = currentWord.article === 'der' ? 'blue' : currentWord.article === 'die' ? 'red' : 'yellow';
+                
+                return (
+                    <div className="w-full max-w-md mx-auto flex flex-col items-center">
+                         <div className="w-full mb-4 flex justify-between items-center px-2">
+                            <div className="text-sm font-semibold text-gray-500">Score: {score}/{words.length}</div>
+                            <div className="text-sm font-semibold text-gray-500">Word {currentIndex + 1} of {words.length}</div>
+                        </div>
+                        
+                        <div className="w-full h-80 perspective-1000">
+                            <div className={`relative w-full h-full transition-transform duration-700 transform-style-3d ${isFlipped ? 'rotate-y-180' : ''}`}>
+                                <div className={`absolute w-full h-full backface-hidden bg-white rounded-2xl shadow-xl border border-gray-200 flex items-center justify-center p-6 ${isFlipped ? '' : 'z-10'}`}>
+                                   {!isChangingWord && <h2 className="text-6xl font-bold text-gray-800 text-center break-all">{currentWord.word}</h2>}
+                                </div>
+                                <div className={`absolute w-full h-full backface-hidden bg-white rounded-2xl shadow-xl rotate-y-180 flex flex-col items-center justify-center p-4 border-4 ${isFlipped ? `border-${articleColorClass}-400 z-10` : 'border-transparent'}`}>
+                                   {isFlipped && (
+                                       <>
+                                           {currentWord.imageLoading ? <div className="flex flex-col items-center justify-center"><LoaderIcon /><p className="mt-2 text-gray-500">Loading image...</p></div>
+                                            : currentWord.imageUrl ? <img src={currentWord.imageUrl} alt={currentWord.word} className="max-w-full max-h-[60%] object-contain rounded-lg"/>
+                                            : <div className="text-gray-400">Image not available</div>}
+                                           <h3 className={`mt-4 text-3xl font-bold text-center text-${articleColorClass}-600`}>{currentWord.article} {currentWord.word}</h3>
+                                       </>
+                                   )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-8 w-full">
+                            {gameState === 'answered' ? (
+                                <div className="grid grid-cols-3 gap-4">
+                                   {['der', 'die', 'das'].map(article => {
+                                        const isCorrectAnswer = currentWord.article === article;
+                                        const isUserGuess = userGuess === article;
+                                        let bgColor = 'bg-gray-200';
+                                        if (isCorrectAnswer) bgColor = 'bg-green-500';
+                                        if (isUserGuess && !isCorrectAnswer) bgColor = 'bg-red-500';
+                                        else if (isUserGuess) bgColor = 'bg-green-500';
+                                        return <button key={article} disabled className={`py-4 px-2 text-2xl font-bold text-white rounded-lg shadow-lg flex items-center justify-center transition-colors ${bgColor}`}>{article}{isUserGuess && (isCorrectAnswer ? <CheckCircleIcon /> : <XCircleIcon />)}</button>;
+                                    })}
+                                </div>
+                            ) : (
+                                 <div className="grid grid-cols-3 gap-4">
+                                    {['der', 'die', 'das'].map(article => <button key={article} onClick={() => handleGuess(article)} className="py-4 px-2 text-2xl font-bold text-white rounded-lg shadow-md transition-transform transform hover:-translate-y-1 bg-gray-700 hover:bg-gray-800">{article}</button>)}
+                                </div>
+                            )}
+                        </div>
+
+                        {gameState === 'answered' && (
+                             <div className="mt-6 w-full">
+                                <button onClick={handleNext} className="w-full relative bg-blue-600 text-white font-bold py-4 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-300 shadow-md overflow-hidden">
+                                   <span className="relative z-10">Next</span>
+                                   <div className="absolute top-0 left-0 h-full bg-black/20" style={{ width: `${100 - (timer / 5 * 100)}%`, transition: 'width 1s linear' }}></div>
+                                   <span className="absolute z-10 right-4 top-1/2 -translate-y-1/2">{timer}s</span>
+                                </button>
+                            </div>
+                        )}
+
+                        {errorList.length > 0 && (
+                            <div className="mt-8 w-full p-4 bg-red-50/50 border border-red-200 rounded-lg">
+                                <h4 className="text-lg font-bold text-gray-700 mb-2 text-center">Words to Review</h4>
+                                <ul className="space-y-1">
+                                    {errorList.map((errWord, index) => {
+                                        const colorClass = errWord.article === 'der' ? 'text-blue-600' : errWord.article === 'die' ? 'text-red-600' : 'text-yellow-600';
+                                        return <li key={`${errWord.word}-${index}`} className={`font-semibold text-center text-lg ${colorClass}`}>{errWord.article} {errWord.word}</li>;
+                                    })}
+                                </ul>
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            const renderFinished = () => (
+                <div className="w-full max-w-md mx-auto text-center">
+                    <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-200">
+                        <h2 className="text-4xl font-bold text-gray-800">Lesson Complete!</h2>
+                        <p className="text-gray-600 mt-4 text-xl">Your final score is:</p>
+                        <p className="text-6xl font-bold my-6 text-blue-600">{score} / {words.length}</p>
+                        {errorList.length > 0 && (
+                            <div className="mt-8 w-full p-4 bg-red-50/50 border border-red-200 rounded-lg">
+                                <h4 className="text-lg font-bold text-gray-700 mb-2 text-center">Final Words to Review</h4>
+                                <ul className="space-y-1">
+                                    {errorList.map((errWord, index) => {
+                                        const colorClass = errWord.article === 'der' ? 'text-blue-600' : errWord.article === 'die' ? 'text-red-600' : 'text-yellow-600';
+                                        return <li key={`${errWord.word}-${index}`} className={`font-semibold text-center text-lg ${colorClass}`}>{errWord.article} {errWord.word}</li>;
+                                    })}
+                                </ul>
+                            </div>
+                        )}
+                        <button onClick={handleRestart} className="w-full bg-blue-600 text-white font-bold py-4 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-all duration-300 ease-in-out transform hover:-translate-y-1 shadow-md mt-8">Start a New Session</button>
+                    </div>
+                </div>
+            );
+            
+            return (
+                <div className="min-h-screen bg-gray-50 font-sans flex items-center justify-center p-4">
+                     <SettingsDialog 
+                        isOpen={isSettingsOpen}
+                        onClose={() => setIsSettingsOpen(false)}
+                        userApiKey={userApiKey}
+                        setUserApiKey={setUserApiKey}
+                        imagePrompt={imagePrompt}
+                        setImagePrompt={setImagePrompt}
+                        onRestart={handleRestart}
+                     />
+                     <button onClick={() => setIsSettingsOpen(true)} className="absolute top-4 right-4 text-gray-500 hover:text-blue-600 transition-colors z-20" title="Settings">
+                        <SettingsIcon />
+                    </button>
+                    
+                    {gameState === 'setup' && renderSetup()}
+                    {gameState === 'loading' && renderLoading()}
+                    {(gameState === 'learning' || gameState === 'answered') && renderFlashcard()}
+                    {gameState === 'finished' && renderFinished()}
+                </div>
+            );
+        }
+
+        // --- Render the App ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
